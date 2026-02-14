@@ -225,7 +225,7 @@ After getting status from the linear agent in Step 2, check if the project is co
 
 **When project is complete:**
 1. Ask linear agent to add final "PROJECT COMPLETE" comment to META issue
-2. Ask github agent to create final PR summarizing all completed features (if GITHUB_REPO configured)
+2. Ask github agent to push all work to remote (if GITHUB_REPO configured). Only create a PR if work is on a feature branch — do NOT create a PR from main to main.
 3. Ask slack agent to send completion notification: ":tada: Project complete! All X features implemented."
 4. **Output this exact signal on its own line:**
    ```
@@ -254,24 +254,22 @@ You have finite context. Prioritize:
 When context is filling up or session is ending:
 1. Commit any work in progress
 2. Ask linear agent to add session summary comment to META issue
-3. **Create PR** (if GITHUB_REPO configured): Ask github agent to create PR summarizing all work done this session
+3. **Push** (if GITHUB_REPO configured): Ask github agent to push. Only create a PR if on a feature branch.
 4. End cleanly
 
-### Session End: Create PR
+### Session End: Push & PR
 
 When ending a session (context full, max iterations reached, or all features done):
 
-Ask github agent to create a PR:
+Ask github agent to push and optionally create a PR:
 ```
-Create a PR summarizing this session's work.
+Push all work to remote (if GITHUB_REPO is configured).
+If work was done on a feature branch (not main), create a PR to merge it into main.
+If all work was committed directly to main, just push — do NOT create a PR.
 Features completed: [list from linear agent]
-Use mcp__arcade__Github_CreatePullRequest with:
-- owner/repo from GITHUB_REPO env var
-- title: "feat: [summary of features]"
-- base: main
-- head: main (or feature branch if used)
-- body: list of completed features with Linear issue IDs
 ```
+
+**IMPORTANT:** A PR from main to main is invalid and will fail. Only create a PR when there is a feature branch with commits ahead of main.
 
 ---
 

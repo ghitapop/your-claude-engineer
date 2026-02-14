@@ -162,12 +162,14 @@ mcp__playwright__browser_wait_for(text="Success")
 - Take screenshots at key moments (evidence for orchestrator)
 - Verify complete user workflows end-to-end
 - Check for console errors
+- After clicking 3+ elements in sequence, take a new `browser_snapshot` before clicking the next element — refs become stale after DOM changes
 
 **DON'T:**
 - Only test with curl commands
 - Skip screenshot evidence
 - Assume code works without browser testing
 - Mark things as working without visual verification
+- Click many elements in a row using refs from a single old snapshot
 
 ---
 
@@ -181,6 +183,16 @@ ls init.sh && chmod +x init.sh && ./init.sh
 # Or start manually
 npm install && npm run dev
 ```
+
+### Port Cleanup
+
+If a port is occupied by a previous dev server and you get "address already in use" errors, run:
+```bash
+python kill_port.py <port>
+```
+This kills only the process listening on that specific port. Example: `python kill_port.py 8080`
+
+**Do NOT** use `pkill`, `taskkill`, or other process-killing commands directly — they are blocked by the security sandbox. Use `kill_port.py` instead.
 
 ---
 

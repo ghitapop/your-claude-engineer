@@ -13,6 +13,8 @@ Write tool: { "file_path": "/path/to/file.md", "content": "file contents here" }
 
 This is mandatory - heredocs will fail silently or error.
 
+**IMPORTANT:** The sandbox uses bash, not cmd.exe. Use forward slashes in paths and never use `cd /d`. Example: `cd "D:/Projects/..."` not `cd /d "D:\Projects\..."`.
+
 ### Available Tools
 
 **GitHub API (via Arcade MCP) - all use `mcp__arcade__Github_` prefix:**
@@ -244,18 +246,22 @@ files_committed:
    ```
 4. Report: "pushed to remote" or "local only"
 
-**Create PR (only when explicitly asked at session end):**
+**Create PR (only when explicitly asked and on a feature branch):**
 When orchestrator asks to "create PR for session work":
-1. Get GITHUB_REPO value: `echo $GITHUB_REPO`
-2. Parse into owner/repo: split on "/" (e.g., "owner/repo-name" → owner="owner", repo="repo-name")
-3. Call `mcp__arcade__Github_CreatePullRequest`:
-   - owner: <parsed owner>
-   - repo: <parsed repo>
-   - title: "feat: Session work - [summary]"
-   - head: "main"
-   - base: "main"
-   - body: List of features completed with Linear issue IDs
-4. Report PR URL
+1. Check current branch: `git branch --show-current`
+2. If on `main`: **Do NOT create a PR.** A PR from main to main is invalid. Just push to main and report: `pr_created: false, reason: all work on main`
+3. If on a feature branch:
+   a. Get GITHUB_REPO value: `echo $GITHUB_REPO`
+   b. Parse into owner/repo: split on "/" (e.g., "owner/repo-name" → owner="owner", repo="repo-name")
+   c. Push the branch: `git push -u origin <branch-name>`
+   d. Call `mcp__arcade__Github_CreatePullRequest`:
+      - owner: <parsed owner>
+      - repo: <parsed repo>
+      - title: "feat: Session work - [summary]"
+      - head: "<branch-name>"
+      - base: "main"
+      - body: List of features completed with Linear issue IDs
+   e. Report PR URL
 
 **Create feature branch:**
 1. Local: `git checkout -b feature/<name>`

@@ -6,6 +6,8 @@ Core agent interaction functions for running autonomous coding sessions.
 """
 
 import asyncio
+import platform
+import subprocess
 import traceback
 from pathlib import Path
 from typing import Literal, NamedTuple
@@ -59,6 +61,59 @@ class SessionResult(NamedTuple):
     response: str
 
 
+def cleanup_dev_servers(project_dir: Path) -> None:
+    """Kill orphaned dev server processes spawned in the project directory.
+
+    After each agent session, background processes like `python -m http.server`
+    or `node` dev servers may still be running with their cwd set to the project
+    directory. These prevent the directory from being deleted on Windows and
+    waste resources.
+    """
+    resolved = str(project_dir.resolve())
+
+    if platform.system() == "Windows":
+        # PowerShell script to find and kill processes whose command line
+        # references the project directory AND match known dev server patterns.
+        ps_script = f"""
+$dir = '{resolved}'
+$devPatterns = @('http.server', 'node', 'npm', 'vite', 'next', 'webpack')
+Get-CimInstance Win32_Process | Where-Object {{
+    $_.CommandLine -and $_.CommandLine -like "*$dir*"
+}} | ForEach-Object {{
+    foreach ($p in $devPatterns) {{
+        if ($_.CommandLine -like "*$p*") {{
+            try {{
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
+                Write-Host "Killed PID $($_.ProcessId) ($($_.Name)): $($_.CommandLine.Substring(0, [Math]::Min(120, $_.CommandLine.Length)))"
+            }} catch {{
+                Write-Host "Could not kill PID $($_.ProcessId): $_"
+            }}
+            break
+        }}
+    }}
+}}
+"""
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_script],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.stdout.strip():
+                print(f"\n[Cleanup] {result.stdout.strip()}")
+        except Exception as e:
+            print(f"\n[Cleanup] Warning: could not clean up dev servers: {e}")
+    else:
+        # Unix: use pkill with -f to match command lines containing the dir
+        for pattern in ["http.server", "node", "npm"]:
+            try:
+                subprocess.run(
+                    ["pkill", "-f", f"{resolved}.*{pattern}"],
+                    capture_output=True, timeout=5,
+                )
+            except Exception:
+                pass
+
+
 async def run_agent_session(
     client: ClaudeSDKClient,
     message: str,
@@ -110,7 +165,13 @@ async def run_agent_session(
 
                         # Check if command was blocked by security hook
                         if "blocked" in str(result_content).lower():
-                            print(f"   [BLOCKED] {result_content}", flush=True)
+                            blocked_str = str(result_content)
+                            blocked_lines = blocked_str.split("\n")
+                            if len(blocked_lines) > 5:
+                                truncated = "\n".join(blocked_lines[:5])
+                                print(f"   [BLOCKED] {truncated}\n   ...(truncated {len(blocked_lines) - 5} lines)", flush=True)
+                            else:
+                                print(f"   [BLOCKED] {blocked_str}", flush=True)
                         elif is_error:
                             # Show errors (truncated)
                             error_str: str = str(result_content)[:500]
@@ -248,6 +309,10 @@ async def run_autonomous_agent(
         else:
             prompt = get_continuation_task(project_dir)
 
+        # Kill leftover dev servers before starting a new session
+        # Prevents port conflicts when a previous session left orphaned servers
+        cleanup_dev_servers(project_dir)
+
         # Run session with async context manager
         # Initialize result to satisfy type checker (will be reassigned in try or except)
         result: SessionResult = SessionResult(status=SESSION_ERROR, response="uninitialized")
@@ -266,6 +331,9 @@ async def run_autonomous_agent(
             print("This may indicate an SDK bug, resource exhaustion, or configuration issue.")
             traceback.print_exc()
             result = SessionResult(status=SESSION_ERROR, response=str(e))
+
+        # Kill orphaned dev servers after every session
+        cleanup_dev_servers(project_dir)
 
         # Handle status
         if result.status == SESSION_COMPLETE:

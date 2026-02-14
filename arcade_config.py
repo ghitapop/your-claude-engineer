@@ -189,9 +189,14 @@ def get_arcade_mcp_config() -> ArcadeMcpConfig:
             "Then set ARCADE_GATEWAY_SLUG=your-gateway-slug in .env"
         )
 
+    # Strip full URL prefix if user pasted the entire gateway URL instead of just the slug
+    slug = ARCADE_GATEWAY_SLUG
+    if slug.startswith(ARCADE_MCP_BASE_URL):
+        slug = slug[len(ARCADE_MCP_BASE_URL):].lstrip("/")
+
     return ArcadeMcpConfig(
         type="http",
-        url=f"{ARCADE_MCP_BASE_URL}/{ARCADE_GATEWAY_SLUG}",
+        url=f"{ARCADE_MCP_BASE_URL}/{slug}",
         headers={
             "Authorization": f"Bearer {ARCADE_API_KEY}",
             "Arcade-User-ID": ARCADE_USER_ID,

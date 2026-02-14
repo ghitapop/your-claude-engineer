@@ -8,24 +8,14 @@ Specialized agents for different domains, coordinated by an orchestrator.
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from agents.definitions import (
-    AGENT_DEFINITIONS,
-    LINEAR_AGENT,
-    GITHUB_AGENT,
-    SLACK_AGENT,
-    CODING_AGENT,
-)
+from agents.definitions import create_agent_definitions
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeSDKClient
     from agent import SessionResult
 
 __all__ = [
-    "AGENT_DEFINITIONS",
-    "LINEAR_AGENT",
-    "GITHUB_AGENT",
-    "SLACK_AGENT",
-    "CODING_AGENT",
+    "create_agent_definitions",
     "run_orchestrated_session",
 ]
 

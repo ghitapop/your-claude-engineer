@@ -69,7 +69,41 @@ def _get_model(agent_name: str) -> ModelOption:
 
 def _load_prompt(name: str) -> str:
     """Load a prompt file."""
-    return (PROMPTS_DIR / f"{name}.md").read_text()
+    return (PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+
+
+# Agent prompt file names (relative to project dir .prompts/)
+AGENT_PROMPT_FILES: Final[dict[str, str]] = {
+    "linear": "linear_agent_prompt.md",
+    "coding": "coding_agent_prompt.md",
+    "github": "github_agent_prompt.md",
+    "slack": "slack_agent_prompt.md",
+}
+
+
+def _stub_prompt(agent_name: str, project_dir: Path | None = None) -> str:
+    """Create a short stub prompt that tells the agent to read its full instructions from a file.
+
+    On Windows, embedding full prompts in AgentDefinition causes the CLI command line
+    to exceed the OS ~32768 char limit. Instead, we pass a short stub and the agent
+    reads the full prompt from .prompts/ in the project directory.
+
+    Uses absolute path when project_dir is provided to avoid path resolution issues
+    in sub-agents that may not share the orchestrator's working directory.
+    """
+    filename = AGENT_PROMPT_FILES[agent_name]
+    if project_dir is not None:
+        abs_path = (project_dir / ".prompts" / filename).resolve()
+        return (
+            f"IMPORTANT: Your full instructions are in `{abs_path}`. "
+            f"You MUST read that file with the Read tool BEFORE doing anything else. "
+            f"Follow those instructions exactly."
+        )
+    return (
+        f"IMPORTANT: Your full instructions are in `.prompts/{filename}`. "
+        f"You MUST read that file with the Read tool BEFORE doing anything else. "
+        f"Follow those instructions exactly."
+    )
 
 
 OrchestratorModelOption = Literal["haiku", "sonnet", "opus"]
@@ -97,46 +131,42 @@ def get_orchestrator_model() -> OrchestratorModelOption:
     return "haiku"
 
 
-def create_agent_definitions() -> dict[str, AgentDefinition]:
+def create_agent_definitions(project_dir: Path | None = None) -> dict[str, AgentDefinition]:
     """
     Create agent definitions with models from environment configuration.
 
-    This is called at import time but reads env vars, so changes to
-    environment require reimporting or restarting.
+    Uses short stub prompts that tell agents to read their full instructions
+    from .prompts/ files in the project directory. This keeps the CLI command
+    line well under the Windows ~32768 char limit.
+
+    Args:
+        project_dir: Project directory for absolute prompt paths. When provided,
+            stub prompts use absolute paths so sub-agents can find their prompt
+            files regardless of working directory.
     """
     return {
         "linear": AgentDefinition(
             description="Manages Linear issues, project status, and session handoff. Use for any Linear operations.",
-            prompt=_load_prompt("linear_agent_prompt"),
+            prompt=_stub_prompt("linear", project_dir),
             tools=get_linear_tools() + FILE_TOOLS,
             model=_get_model("linear"),
         ),
         "github": AgentDefinition(
             description="Handles Git commits, branches, and GitHub PRs. Use for version control operations.",
-            prompt=_load_prompt("github_agent_prompt"),
+            prompt=_stub_prompt("github", project_dir),
             tools=get_github_tools() + FILE_TOOLS + ["Bash"],
             model=_get_model("github"),
         ),
         "slack": AgentDefinition(
             description="Sends Slack notifications to keep users informed. Use for progress updates.",
-            prompt=_load_prompt("slack_agent_prompt"),
+            prompt=_stub_prompt("slack", project_dir),
             tools=get_slack_tools() + FILE_TOOLS,
             model=_get_model("slack"),
         ),
         "coding": AgentDefinition(
             description="Writes and tests code. Use when implementing features or fixing bugs.",
-            prompt=_load_prompt("coding_agent_prompt"),
+            prompt=_stub_prompt("coding", project_dir),
             tools=get_coding_tools(),
             model=_get_model("coding"),
         ),
     }
-
-
-# Create definitions at import time (reads env vars)
-AGENT_DEFINITIONS: dict[str, AgentDefinition] = create_agent_definitions()
-
-# Export individual agents for convenience
-LINEAR_AGENT = AGENT_DEFINITIONS["linear"]
-GITHUB_AGENT = AGENT_DEFINITIONS["github"]
-SLACK_AGENT = AGENT_DEFINITIONS["slack"]
-CODING_AGENT = AGENT_DEFINITIONS["coding"]
