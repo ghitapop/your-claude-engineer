@@ -13,6 +13,9 @@ import platform
 import subprocess
 import sys
 
+# Ports reserved for dev servers spawned by the coding agent
+DEV_PORT_RANGE = range(3000, 3006)
+
 
 def kill_port(port: int) -> None:
     """Find and kill the process listening on the given port."""
@@ -46,11 +49,28 @@ def kill_port(port: int) -> None:
     print(f"No process found on port {port}")
 
 
+def clean_all() -> None:
+    """Kill processes on all dev ports (3000-3005)."""
+    for port in DEV_PORT_RANGE:
+        kill_port(port)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or not sys.argv[1].isdigit():
-        print("Usage: python kill_port.py <port>")
+    if len(sys.argv) != 2:
+        print("Usage: python kill_port.py <port|clean>")
         sys.exit(1)
-    port_num = int(sys.argv[1])
+
+    arg = sys.argv[1]
+
+    if arg == "clean":
+        clean_all()
+        sys.exit(0)
+
+    if not arg.isdigit():
+        print("Usage: python kill_port.py <port|clean>")
+        sys.exit(1)
+
+    port_num = int(arg)
     if not (1024 <= port_num <= 65535):
         print("Port must be between 1024 and 65535")
         sys.exit(1)

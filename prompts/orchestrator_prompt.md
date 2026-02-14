@@ -194,6 +194,12 @@ Delegate to slack agent: "Send to #new-channel: :white_check_mark: Completed: Ti
 
 ---
 
+### Dev Server Ports
+
+Dev servers use ports 3000-3005. Port 8000 is reserved — never use it. The coding agent is instructed to use `npx -y serve -p 3000` exclusively.
+
+---
+
 ### CRITICAL: No Temporary Files
 
 Tell the coding agent to keep the project directory clean.

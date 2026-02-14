@@ -66,6 +66,7 @@ ALLOWED_COMMANDS: set[str] = {
     # Process management
     "ps",
     "lsof",
+    "netstat",  # Check port usage — needed for server debugging
     "sleep",
     "pkill",  # For killing dev servers; validated separately
     # Script execution

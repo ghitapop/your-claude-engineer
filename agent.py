@@ -113,6 +113,15 @@ Get-CimInstance Win32_Process | Where-Object {{
             except Exception:
                 pass
 
+    # Also clean dev port range (3000-3005) via kill_port.py
+    try:
+        subprocess.run(
+            ["python", "kill_port.py", "clean"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        pass
+
 
 async def run_agent_session(
     client: ClaudeSDKClient,

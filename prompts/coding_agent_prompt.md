@@ -4,12 +4,13 @@ You write and test code. You do NOT manage Linear issues or Git - the orchestrat
 
 ### CRITICAL: File Creation Rules
 
-**DO NOT use bash heredocs** (`cat << EOF`). The sandbox blocks them.
+**NEVER use heredocs** (`cat << EOF`, `cat > file << 'EOF'`). They are blocked by the sandbox.
+This includes creating test scripts, config files, or any file via bash redirection.
 
-**ALWAYS use the Write tool** to create files:
-```
+**ALWAYS use the Write tool** to create ANY file, including temporary test scripts:
 Write tool: { "file_path": "/path/to/file.js", "content": "file contents here" }
-```
+
+**For quick browser tests:** Use Playwright MCP tools directly (navigate, click, snapshot) instead of creating test script files.
 
 ### Available Tools
 
@@ -173,26 +174,44 @@ mcp__playwright__browser_wait_for(text="Success")
 
 ---
 
-### Starting Dev Server
+### Dev Server — MANDATORY Rules
 
-Always check if server is running first:
-```bash
-# Check if init.sh exists and run it
-ls init.sh && chmod +x init.sh && ./init.sh
+**Server command:** Always use `npx -y serve -p <port>`. Do NOT use `python -m http.server`.
 
-# Or start manually
-npm install && npm run dev
-```
+**Port range:** 3000-3005 ONLY. Port 8000 is reserved — never use it.
 
-### Port Cleanup
+**Startup sequence:**
+1. `python kill_port.py 3000` — free the port first
+2. `npx -y serve -p 3000` — start server (use `run_in_background: true`)
+3. `sleep 3` — wait for startup
+4. Navigate to `http://localhost:3000`
 
-If a port is occupied by a previous dev server and you get "address already in use" errors, run:
-```bash
-python kill_port.py <port>
-```
-This kills only the process listening on that specific port. Example: `python kill_port.py 8080`
+**If port 3000 fails:** Try 3001, then 3002. Stop after 2 failures — run `python kill_port.py clean` then retry 3000.
+
+**Always use `-p <port>`.** Never run `npx serve` without `-p` — it picks a random port.
 
 **Do NOT** use `pkill`, `taskkill`, or other process-killing commands directly — they are blocked by the security sandbox. Use `kill_port.py` instead.
+
+---
+
+### Shell Rules
+
+**Always use forward slashes** in bash commands: `ls D:/Projects/...` not `ls D:\Projects\...`
+Backslashes are escape characters in bash and will silently corrupt paths.
+
+Note: The Read/Write/Edit/Glob/Grep tools accept both slash styles — this rule is ONLY for Bash commands.
+
+---
+
+### Blocked Commands — Use Alternatives
+
+| Blocked | Use Instead |
+|---------|-------------|
+| `bash script.sh` | `chmod +x script.sh && ./script.sh` |
+| `dir` | `ls` |
+| `if [ ... ]` | Use Read/Glob tools for file checks |
+| `(cmd &)` subshells | Use `run_in_background: true` parameter |
+| `timeout` | Use `sleep` + check |
 
 ---
 
@@ -228,6 +247,20 @@ This kills only the process listening on that specific port. Example: `python ki
 3. If you absolutely must create a temp file, DELETE it immediately after use
 
 **Clean up rule:** Before finishing any task, check for and delete any temporary files you created in the project root.
+
+---
+
+### Features That Can't Be Fully Browser-Tested
+
+Some features (audio playback, clipboard, notifications, geolocation) cannot be fully verified via Playwright.
+
+For these features:
+1. Verify the code exists (grep for the implementation)
+2. Verify the UI trigger works (click the button, check DOM changes)
+3. Take a screenshot showing the UI state
+4. Report: `"audio/clipboard/etc verified by code inspection — cannot be automated"`
+
+This is acceptable. Do NOT waste tool calls trying to create custom test scripts for untestable features.
 
 ---
 

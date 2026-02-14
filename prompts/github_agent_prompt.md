@@ -66,6 +66,13 @@ Write init.sh
 Write .gitignore
 ```
 
+**init.sh content template:**
+```bash
+#!/bin/bash
+python kill_port.py 3000 2>/dev/null
+npx -y serve -p 3000
+```
+
 **3. Initialize local git:**
 ```bash
 git init
