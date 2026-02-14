@@ -11,3 +11,5 @@ venv_linux
 __pycache__
 api-key
 .playwright-mcp
+.claude/settings.local.json
+CLAUDE.md
