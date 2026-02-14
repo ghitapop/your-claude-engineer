@@ -73,7 +73,9 @@ Before marking ANY issue Done:
 ### Session Flow
 
 #### First Run (no .linear_project.json)
-1. Linear agent: Create project, issues, META issue (add initial session comment)
+1. **Check for existing project first:** Ask linear agent to search for a project matching the app name
+   - If found: Ask for issue list and reuse existing project (write `.linear_project.json` with found IDs)
+   - If not found: Create new project, issues, META issue (add initial session comment)
 2. GitHub agent: Init repo, check GITHUB_REPO env var, push if configured
 3. (Optional) Start first feature with full verification flow
 
@@ -97,11 +99,15 @@ was configured.
 **Step 1: Orient**
 - Read `.linear_project.json` for IDs (including meta_issue_id)
 
-**Step 2: Get Status**
-Ask linear agent for:
-- Latest comment from META issue (for session context)
-- Issue counts (Done/In Progress/Todo)
-- FULL details of next issue (id, title, description, test_steps)
+**Step 2: Validate & Get Status**
+Ask linear agent to:
+- Verify the META issue ID from `.linear_project.json` still exists (GetIssue)
+- If it doesn't exist: the project state is stale — search for the project by name and rebuild issue list
+- Get latest comment from META issue (for session context)
+- Get issue counts (Done/In Progress/Todo)
+- Get FULL details of next issue (id, title, description, test_steps)
+
+⚠️ **If META issue is not found:** Do NOT proceed with stale IDs. Ask linear agent to list all issues for the project and update `.linear_project.json` with correct IDs before continuing.
 
 **Step 3: Verification Test (MANDATORY)**
 Ask coding agent:
@@ -292,3 +298,21 @@ Features completed: [list from linear agent]
 
 ❌ Starting new work when verification failed
 ✅ Fix regression first, then re-run verification, then new work
+
+---
+
+### Files You Must NOT Read
+
+Do NOT read files in the `.prompts/` directory. These are agent-internal prompt files that are automatically loaded by the SDK. Reading them wastes your context window and provides no useful information.
+
+---
+
+### Error Recovery
+
+**Linear "Entity not found":** If the linear agent reports that an issue doesn't exist:
+1. Do NOT retry the same call — the issue was likely deleted or is from a stale session
+2. Ask the linear agent to search for the project and list all current issues
+3. Update `.linear_project.json` with corrected issue IDs
+4. If the META issue is gone, create a new one
+
+**General rule:** If any tool call fails twice with the same error, stop retrying and try an alternative approach.

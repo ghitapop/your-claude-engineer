@@ -41,6 +41,25 @@ File tools: `Read`, `Write`, `Edit`
 
 ---
 
+### Handling "Entity not found" Errors
+
+If `AddComment` or `GetIssue` returns "Entity not found":
+1. The issue may have been deleted or the ID is stale
+2. Do NOT retry with the same ID
+3. Use `ListIssues` with the project name to find current issue IDs
+4. Report the correct IDs back to the orchestrator
+
+---
+
+### Before Creating a Project
+
+When asked to create a project, first check if one already exists:
+1. Use `ListProjects` to see if a project with the same name exists
+2. If found: report back the existing project details instead of creating a duplicate
+3. If not found: proceed with creation
+
+---
+
 ### Project Initialization (First Run)
 
 When asked to initialize a project:

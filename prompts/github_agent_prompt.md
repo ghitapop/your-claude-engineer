@@ -57,7 +57,7 @@ When asked to initialize git:
 ```bash
 echo $GITHUB_REPO
 ```
-This tells you if a remote repo is configured. Remember the result for step 4.
+This tells you if a remote repo is configured. Remember the result for later.
 
 **2. Create files locally** (use Write tool):
 ```
@@ -73,21 +73,51 @@ python kill_port.py 3000 2>/dev/null
 npx -y serve -p 3000
 ```
 
-**3. Initialize local git:**
+**3. Initialize local git and commit ALL files:**
+
+Stage everything in the project directory — not just the files you created.
+Other files (app_spec.txt, .linear_project.json) may already exist and MUST be committed
+before any remote operations. Untracked files cause merge failures.
+
 ```bash
 git init
-git add README.md init.sh .gitignore
-git commit -m "chore: Initial project setup
-
-- Added README with project overview
-- Added init.sh for dev environment setup"
+git add -A
+git commit -m "chore: Initial project setup"
 ```
 
 **4. Set up remote and push (if GITHUB_REPO was set in step 1):**
 
 If GITHUB_REPO returned a value like "owner/repo-name":
+
 ```bash
 git remote add origin https://github.com/$GITHUB_REPO.git
+git fetch origin main
+```
+
+Check if remote has content:
+```bash
+git branch -r
+```
+
+**If `origin/main` exists (remote is NOT empty):**
+```bash
+git merge origin/main --allow-unrelated-histories
+```
+If merge conflicts occur, keep local versions (they are freshly generated):
+```bash
+git checkout --ours .
+git add .
+git commit -m "chore: Merge with existing remote, keep generated files"
+```
+
+**Push:**
+```bash
+git branch -M main
+git push -u origin main
+```
+
+**If remote is empty (no `origin/main`):**
+```bash
 git branch -M main
 git push -u origin main
 ```
@@ -97,7 +127,10 @@ Report back: `remote_configured: true, github_repo: <value>`
 If GITHUB_REPO was empty, report: `remote_configured: false, commits are local only`
 
 **CRITICAL:**
-- ALWAYS check `GITHUB_REPO` env var FIRST - this is mandatory
+- ALWAYS check `GITHUB_REPO` env var FIRST — this is mandatory
+- ALWAYS commit ALL local files BEFORE fetching/merging with remote
+- NEVER use `git reset --hard` to resolve push rejections — this destroys local work silently
+- If merge fails even after `--ours`, report the conflict to the orchestrator instead of forcing
 - Use the Write tool for local files, not GitHub API
 - The GitHub API tools (Arcade) are for PRs, issues, branches on existing repos
 - Report whether remote was configured in your response

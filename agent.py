@@ -150,6 +150,7 @@ async def run_agent_session(
 
         # Collect response text and show tool use
         response_text: str = ""
+        tool_names: dict[str, str] = {}  # tool_use_id → tool name
         async for msg in client.receive_response():
             # Handle AssistantMessage (text and tool use)
             if isinstance(msg, AssistantMessage):
@@ -158,6 +159,7 @@ async def run_agent_session(
                         response_text += block.text
                         print(block.text, end="", flush=True)
                     elif isinstance(block, ToolUseBlock):
+                        tool_names[block.id] = block.name
                         print(f"\n[Tool: {block.name}]", flush=True)
                         input_str: str = str(block.input)
                         if len(input_str) > 200:
@@ -171,9 +173,11 @@ async def run_agent_session(
                     if isinstance(block, ToolResultBlock):
                         result_content = block.content
                         is_error: bool = bool(block.is_error) if block.is_error else False
+                        tool_name = tool_names.get(block.tool_use_id, "")
 
                         # Check if command was blocked by security hook
-                        if "blocked" in str(result_content).lower():
+                        # Only Bash results can be genuine security blocks
+                        if tool_name == "Bash" and "blocked" in str(result_content).lower():
                             blocked_str = str(result_content)
                             blocked_lines = blocked_str.split("\n")
                             if len(blocked_lines) > 5:
