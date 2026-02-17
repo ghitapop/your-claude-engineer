@@ -558,6 +558,51 @@
       ripple.addEventListener("animationend", () => ripple.remove());
     }
 
+    // ---- Audio notification (Web Audio API) ----
+    let audioCtx = null;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioCtx;
+    }
+
+    function playCompletionSound() {
+      try {
+        const ctx = getAudioContext();
+
+        // Gentle three-note chime: C5 -> E5 -> G5
+        const notes = [523.25, 659.25, 783.99];
+        const noteDuration = 0.18; // seconds per note
+        const noteGap      = 0.06; // gap between notes
+
+        notes.forEach(function(freq, i) {
+          const startTime = ctx.currentTime + i * (noteDuration + noteGap);
+
+          const oscillator = ctx.createOscillator();
+          const gainNode   = ctx.createGain();
+
+          oscillator.type      = "sine";
+          oscillator.frequency.setValueAtTime(freq, startTime);
+
+          // Gentle envelope: quick attack, smooth decay
+          gainNode.gain.setValueAtTime(0, startTime);
+          gainNode.gain.linearRampToValueAtTime(0.18, startTime + 0.03);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + noteDuration);
+
+          oscillator.connect(gainNode);
+          gainNode.connect(ctx.destination);
+
+          oscillator.start(startTime);
+          oscillator.stop(startTime + noteDuration);
+        });
+      } catch (err) {
+        // Audio not supported or blocked — fail silently
+        console.warn("Audio notification unavailable:", err);
+      }
+    }
+
     // ---- Timer logic ----
     function tick() {
       if (remaining <= 0) {
@@ -565,6 +610,9 @@
         intervalId = null;
         running    = false;
         setStartBtnState(false);
+
+        // Play completion sound
+        playCompletionSound();
 
         // If completing a work session, increment pomodoro count
         if (currentSession === "work") {
@@ -620,6 +668,11 @@
     // ---- Event listeners ----
     startBtn.addEventListener("click", function(e) {
       triggerRipple(this, e);
+      // Resume AudioContext if it was suspended (browser autoplay policy)
+      const ctx = getAudioContext();
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
       toggleTimer();
     });
 
