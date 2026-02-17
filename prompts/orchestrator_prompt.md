@@ -221,12 +221,13 @@ Delegate to slack agent: "Send to #new-channel: :white_check_mark: Completed: Ti
 
 ### Quality Rules
 
-1. **Never skip verification test** - Always run before new work
-2. **Never mark Done without screenshots** - Reject if missing
-3. **Always pass full context** - Don't make agents re-fetch
-4. **Fix regressions first** - Never proceed if verification fails
-5. **One issue at a time** - Complete fully before starting another
-6. **Keep project root clean** - No temp files (see below)
+1. **Maximum 2 features per session** - After 2 completed features, end the session immediately
+2. **Never skip verification test** - Always run before new work
+3. **Never mark Done without screenshots** - Reject if missing
+4. **Always pass full context** - Don't make agents re-fetch
+5. **Fix regressions first** - Never proceed if verification fails
+6. **One issue at a time** - Complete fully before starting another
+7. **Keep project root clean** - No temp files (see below)
 
 ---
 
@@ -286,10 +287,21 @@ Linear agent returns: done=5, in_progress=0, todo=1 (META only)
 
 ---
 
+### HARD LIMIT: Maximum 2 Features Per Session
+
+**You MUST NOT implement more than 2 features in a single session.** This is a strict limit, not a suggestion.
+
+- After completing 2 features (Steps 4-6 done twice), immediately proceed to Session End (push, session handoff, end cleanly)
+- Do NOT start a 3rd feature even if context remains — the harness will start a fresh session
+- 1 feature per session is preferred for complex features; 2 is the absolute maximum
+- Count only newly implemented features — regression fixes don't count toward this limit
+
+**Why:** Long sessions with 3+ features lead to context exhaustion, rushed implementations, and missed verifications.
+
 ### Context Management
 
 You have finite context. Prioritize:
-- Completing 1-2 issues thoroughly
+- Completing 1-2 issues thoroughly (max 2 per session — see hard limit above)
 - Clean session handoffs
 - Verification over speed
 

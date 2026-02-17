@@ -67,6 +67,7 @@ If ending the session, delegate to `linear` agent:
 - Notes for next session"
 
 ## CRITICAL RULES
+- **HARD LIMIT: Maximum 2 features per session.** After completing 2 features (Steps 4-6 done twice), go straight to Step 7 (session handoff) and end. Do NOT start a 3rd feature.
 - Do NOT skip the verification test in Step 3
 - Do NOT mark Done without screenshot evidence from coding agent
 - Do NOT start Step 4 if Step 3 fails
