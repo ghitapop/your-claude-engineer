@@ -13,3 +13,4 @@ api-key
 .playwright-mcp
 .claude/settings.local.json
 CLAUDE.md
+.specs
