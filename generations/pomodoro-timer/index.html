@@ -97,6 +97,63 @@
       transform: scale(1.15);
     }
 
+    /* ---- Total session counter ---- */
+    .session-counter {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .session-counter-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .session-counter-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .session-counter-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .btn-reset-counter {
+      font-size: 0.7rem;
+      padding: 7px 18px;
+      border-color: rgba(255, 99, 71, 0.4);
+      color: var(--text-secondary);
+      letter-spacing: 0.1em;
+    }
+
+    .btn-reset-counter:hover {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(255, 99, 71, 0.25);
+    }
+
+    @keyframes counterPop {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.35); }
+      100% { transform: scale(1); }
+    }
+
+    .counter-pop {
+      animation: counterPop 0.35s ease-out;
+    }
+
     /* ---- Timer ring ---- */
     .timer-wrapper {
       position: relative;
@@ -330,6 +387,14 @@
     <div class="pomodoro-dot" id="dot3"></div>
   </div>
 
+  <div class="session-counter">
+    <div class="session-counter-display">
+      <div class="session-counter-value" id="totalCountDisplay" aria-live="polite" aria-label="Total completed pomodoros: 0">0</div>
+      <div class="session-counter-label">Pomodoros Completed</div>
+    </div>
+    <button class="btn btn-reset-counter" id="resetCounterBtn" aria-label="Reset pomodoro counter">Reset Counter</button>
+  </div>
+
   <script>
     // ---- Constants ----
     const SESSIONS = {
@@ -355,6 +420,9 @@
       ringProgress.style.strokeDashoffset = offset;
     }
 
+    // ---- LocalStorage key ----
+    const STORAGE_KEY = "pomodoro_total_completed";
+
     // ---- State ----
     let cycleIndex       = 0;
     let currentSession   = SESSION_CYCLE[cycleIndex];
@@ -362,17 +430,21 @@
     let remaining        = totalSeconds;
     let running          = false;
     let intervalId       = null;
-    let pomodorosComplete = 0; // count of completed work sessions in current set
+    let pomodorosComplete = 0; // count of completed work sessions in current 4-cycle (0-3)
+    // Total completed pomodoros - persisted to localStorage
+    let totalPomodorosCompleted = parseInt(localStorage.getItem(STORAGE_KEY) || "0", 10);
 
-    const timerDisplay      = document.getElementById("timerDisplay");
-    const sessionLabel      = document.getElementById("sessionLabel");
-    const sessionTypeBadge  = document.getElementById("sessionTypeBadge");
-    const startBtn          = document.getElementById("startBtn");
-    const startBtnText      = document.getElementById("startBtnText");
-    const resetBtn          = document.getElementById("resetBtn");
-    const skipBtn           = document.getElementById("skipBtn");
-    const pomodoroCountEl   = document.getElementById("pomodoroCount");
-    const dots              = [
+    const timerDisplay        = document.getElementById("timerDisplay");
+    const sessionLabel        = document.getElementById("sessionLabel");
+    const sessionTypeBadge    = document.getElementById("sessionTypeBadge");
+    const startBtn            = document.getElementById("startBtn");
+    const startBtnText        = document.getElementById("startBtnText");
+    const resetBtn            = document.getElementById("resetBtn");
+    const skipBtn             = document.getElementById("skipBtn");
+    const pomodoroCountEl     = document.getElementById("pomodoroCount");
+    const totalCountDisplay   = document.getElementById("totalCountDisplay");
+    const resetCounterBtn     = document.getElementById("resetCounterBtn");
+    const dots                = [
       document.getElementById("dot0"),
       document.getElementById("dot1"),
       document.getElementById("dot2"),
@@ -408,6 +480,24 @@
         "aria-label",
         `Pomodoro progress: ${pomodorosComplete} of 4 completed`
       );
+    }
+
+    function updateTotalCounter(animate) {
+      totalCountDisplay.textContent = totalPomodorosCompleted;
+      totalCountDisplay.setAttribute(
+        "aria-label",
+        `Total completed pomodoros: ${totalPomodorosCompleted}`
+      );
+      localStorage.setItem(STORAGE_KEY, totalPomodorosCompleted);
+
+      if (animate) {
+        totalCountDisplay.classList.remove("counter-pop");
+        void totalCountDisplay.offsetWidth; // force reflow
+        totalCountDisplay.classList.add("counter-pop");
+        totalCountDisplay.addEventListener("animationend", () => {
+          totalCountDisplay.classList.remove("counter-pop");
+        }, { once: true });
+      }
     }
 
     function updateSessionBadge(sessionKey) {
@@ -480,6 +570,8 @@
         if (currentSession === "work") {
           pomodorosComplete = (pomodorosComplete + 1) % 4;
           updatePomodoroDots();
+          totalPomodorosCompleted++;
+          updateTotalCounter(true);
         }
 
         // Auto-advance and auto-start the next session
@@ -541,11 +633,18 @@
       skipSession();
     });
 
+    resetCounterBtn.addEventListener("click", function(e) {
+      triggerRipple(this, e);
+      totalPomodorosCompleted = 0;
+      updateTotalCounter(false);
+    });
+
     // ---- Init ----
     sessionLabel.textContent = SESSIONS[currentSession].label;
     updateSessionBadge(currentSession);
     updatePomodoroDots();
     updateDisplay();
+    updateTotalCounter(false);
   </script>
 </body>
 </html>
