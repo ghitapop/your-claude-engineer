@@ -42,7 +42,59 @@
       letter-spacing: 0.25em;
       text-transform: uppercase;
       color: var(--accent);
-      margin-bottom: 40px;
+      margin-bottom: 24px;
+    }
+
+    /* ---- Session type badge ---- */
+    .session-type-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      padding: 5px 16px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(255, 99, 71, 0.35);
+      transition: background 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+    }
+
+    .session-type-badge.break {
+      --badge-color: #4da6ff;
+      background: rgba(77, 166, 255, 0.15);
+      color: var(--badge-color);
+      border-color: rgba(77, 166, 255, 0.3);
+    }
+
+    .session-type-badge.long-break {
+      --badge-color: #50d890;
+      background: rgba(80, 216, 144, 0.15);
+      color: var(--badge-color);
+      border-color: rgba(80, 216, 144, 0.3);
+    }
+
+    /* ---- Pomodoro count dots ---- */
+    .pomodoro-count {
+      display: flex;
+      gap: 8px;
+      margin-top: 28px;
+      align-items: center;
+    }
+
+    .pomodoro-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 1.5px solid rgba(255, 99, 71, 0.3);
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    .pomodoro-dot.filled {
+      background: var(--accent);
+      border-color: var(--accent);
+      transform: scale(1.15);
     }
 
     /* ---- Timer ring ---- */
@@ -75,7 +127,15 @@
       stroke: var(--accent);
       stroke-width: var(--ring-stroke);
       stroke-linecap: round;
-      transition: stroke-dashoffset 0.5s linear;
+      transition: stroke-dashoffset 0.5s linear, stroke 0.4s ease;
+    }
+
+    .ring-progress.break {
+      stroke: #4da6ff;
+    }
+
+    .ring-progress.long-break {
+      stroke: #50d890;
     }
 
     /* ---- Timer face ---- */
@@ -232,6 +292,8 @@
 <body>
   <h1>Pomodoro Timer</h1>
 
+  <div class="session-type-badge" id="sessionTypeBadge" aria-live="polite">Work Session</div>
+
   <div class="timer-wrapper" aria-label="Timer progress ring">
     <svg class="progress-ring" viewBox="0 0 280 280" aria-hidden="true">
       <circle
@@ -261,15 +323,23 @@
     <button class="btn btn-icon" id="skipBtn" aria-label="Skip to next session" title="Skip">&#8677;</button>
   </div>
 
+  <div class="pomodoro-count" id="pomodoroCount" aria-label="Pomodoro progress: 0 of 4 completed">
+    <div class="pomodoro-dot" id="dot0"></div>
+    <div class="pomodoro-dot" id="dot1"></div>
+    <div class="pomodoro-dot" id="dot2"></div>
+    <div class="pomodoro-dot" id="dot3"></div>
+  </div>
+
   <script>
     // ---- Constants ----
     const SESSIONS = {
-      work:       { label: "Work Session",  duration: 25 * 60 },
-      shortBreak: { label: "Short Break",   duration:  5 * 60 },
-      longBreak:  { label: "Long Break",    duration: 15 * 60 },
+      work:       { label: "Work Session",  duration: 25 * 60, type: "work" },
+      shortBreak: { label: "Short Break",   duration:  5 * 60, type: "short-break" },
+      longBreak:  { label: "Long Break",    duration: 15 * 60, type: "long-break" },
     };
 
-    // Cycle order: work -> shortBreak -> work -> shortBreak -> ... (every 4th work -> longBreak)
+    // Pomodoro technique: 4 work sessions, then long break
+    // Cycle: work -> shortBreak -> work -> shortBreak -> work -> shortBreak -> work -> longBreak -> repeat
     const SESSION_CYCLE = ["work", "shortBreak", "work", "shortBreak", "work", "shortBreak", "work", "longBreak"];
 
     // ---- SVG ring setup ----
@@ -286,19 +356,28 @@
     }
 
     // ---- State ----
-    let cycleIndex     = 0;
-    let currentSession = SESSION_CYCLE[cycleIndex];
-    let totalSeconds   = SESSIONS[currentSession].duration;
-    let remaining      = totalSeconds;
-    let running        = false;
-    let intervalId     = null;
+    let cycleIndex       = 0;
+    let currentSession   = SESSION_CYCLE[cycleIndex];
+    let totalSeconds     = SESSIONS[currentSession].duration;
+    let remaining        = totalSeconds;
+    let running          = false;
+    let intervalId       = null;
+    let pomodorosComplete = 0; // count of completed work sessions in current set
 
-    const timerDisplay  = document.getElementById("timerDisplay");
-    const sessionLabel  = document.getElementById("sessionLabel");
-    const startBtn      = document.getElementById("startBtn");
-    const startBtnText  = document.getElementById("startBtnText");
-    const resetBtn      = document.getElementById("resetBtn");
-    const skipBtn       = document.getElementById("skipBtn");
+    const timerDisplay      = document.getElementById("timerDisplay");
+    const sessionLabel      = document.getElementById("sessionLabel");
+    const sessionTypeBadge  = document.getElementById("sessionTypeBadge");
+    const startBtn          = document.getElementById("startBtn");
+    const startBtnText      = document.getElementById("startBtnText");
+    const resetBtn          = document.getElementById("resetBtn");
+    const skipBtn           = document.getElementById("skipBtn");
+    const pomodoroCountEl   = document.getElementById("pomodoroCount");
+    const dots              = [
+      document.getElementById("dot0"),
+      document.getElementById("dot1"),
+      document.getElementById("dot2"),
+      document.getElementById("dot3"),
+    ];
 
     // ---- Helpers ----
     function formatTime(secs) {
@@ -317,12 +396,45 @@
       startBtn.setAttribute("aria-label", isRunning ? "Pause timer" : "Start timer");
     }
 
-    function applySessionChange() {
+    function updatePomodoroDots() {
+      dots.forEach((dot, i) => {
+        if (i < pomodorosComplete) {
+          dot.classList.add("filled");
+        } else {
+          dot.classList.remove("filled");
+        }
+      });
+      pomodoroCountEl.setAttribute(
+        "aria-label",
+        `Pomodoro progress: ${pomodorosComplete} of 4 completed`
+      );
+    }
+
+    function updateSessionBadge(sessionKey) {
+      const session = SESSIONS[sessionKey];
+      // Update badge text
+      sessionTypeBadge.textContent = session.label.toUpperCase();
+
+      // Update badge color class
+      sessionTypeBadge.classList.remove("break", "long-break");
+      ringProgress.classList.remove("break", "long-break");
+
+      if (sessionKey === "shortBreak") {
+        sessionTypeBadge.classList.add("break");
+        ringProgress.classList.add("break");
+      } else if (sessionKey === "longBreak") {
+        sessionTypeBadge.classList.add("long-break");
+        ringProgress.classList.add("long-break");
+      }
+    }
+
+    function applySessionChange(autoStart) {
       currentSession = SESSION_CYCLE[cycleIndex];
       totalSeconds   = SESSIONS[currentSession].duration;
       remaining      = totalSeconds;
 
       sessionLabel.textContent = SESSIONS[currentSession].label;
+      updateSessionBadge(currentSession);
 
       // Visual flash to indicate session change
       timerDisplay.classList.remove("session-change");
@@ -332,6 +444,13 @@
       sessionLabel.classList.add("session-change");
 
       updateDisplay();
+
+      // Auto-start the next session if triggered by timer completion
+      if (autoStart) {
+        intervalId = setInterval(tick, 1000);
+        running    = true;
+        setStartBtnState(true);
+      }
     }
 
     // ---- Ripple effect ----
@@ -356,8 +475,15 @@
         intervalId = null;
         running    = false;
         setStartBtnState(false);
-        // Auto-advance to next session
-        advanceSession();
+
+        // If completing a work session, increment pomodoro count
+        if (currentSession === "work") {
+          pomodorosComplete = (pomodorosComplete + 1) % 4;
+          updatePomodoroDots();
+        }
+
+        // Auto-advance and auto-start the next session
+        advanceSession(true);
         return;
       }
       remaining--;
@@ -386,9 +512,9 @@
       updateDisplay();
     }
 
-    function advanceSession() {
+    function advanceSession(autoStart) {
       cycleIndex = (cycleIndex + 1) % SESSION_CYCLE.length;
-      applySessionChange();
+      applySessionChange(autoStart || false);
     }
 
     function skipSession() {
@@ -396,7 +522,7 @@
       intervalId = null;
       running    = false;
       setStartBtnState(false);
-      advanceSession();
+      advanceSession(false);
     }
 
     // ---- Event listeners ----
@@ -417,6 +543,8 @@
 
     // ---- Init ----
     sessionLabel.textContent = SESSIONS[currentSession].label;
+    updateSessionBadge(currentSession);
+    updatePomodoroDots();
     updateDisplay();
   </script>
 </body>
