@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pomodoro Timer</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --accent: #ff6347;
+      --accent-dim: rgba(255, 99, 71, 0.2);
+      --text-primary: #eaeaea;
+      --text-secondary: #888;
+      --ring-size: 280px;
+      --ring-stroke: 8;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Oxygen, Ubuntu, Cantarell, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 40px;
+    }
+
+    /* ---- Timer ring ---- */
+    .timer-wrapper {
+      position: relative;
+      width: var(--ring-size);
+      height: var(--ring-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .progress-ring {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: var(--accent-dim);
+      stroke-width: var(--ring-stroke);
+    }
+
+    .ring-progress {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: var(--ring-stroke);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.5s linear;
+    }
+
+    /* ---- Timer face ---- */
+    .timer-face {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      z-index: 1;
+    }
+
+    .timer-display {
+      font-size: 4rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .session-label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    /* ---- Controls ---- */
+    .controls {
+      display: flex;
+      gap: 16px;
+      margin-top: 40px;
+      align-items: center;
+    }
+
+    .btn {
+      background: none;
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      border-radius: 50px;
+      padding: 12px 32px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #e5533d;
+      border-color: #e5533d;
+    }
+
+    .btn-icon {
+      padding: 12px 20px;
+      font-size: 1rem;
+    }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 360px) {
+      :root {
+        --ring-size: 220px;
+      }
+
+      .timer-display {
+        font-size: 3rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Pomodoro Timer</h1>
+
+  <div class="timer-wrapper" aria-label="Timer progress ring">
+    <svg class="progress-ring" viewBox="0 0 280 280" aria-hidden="true">
+      <circle
+        class="ring-bg"
+        cx="140" cy="140"
+        r="126"
+      />
+      <circle
+        class="ring-progress"
+        id="ringProgress"
+        cx="140" cy="140"
+        r="126"
+      />
+    </svg>
+
+    <div class="timer-face">
+      <div class="timer-display" id="timerDisplay" aria-live="polite">25:00</div>
+      <div class="session-label" id="sessionLabel">Work Session</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-primary" id="startBtn" aria-label="Start timer">Start</button>
+    <button class="btn btn-icon" id="resetBtn" aria-label="Reset timer" title="Reset">&#8635;</button>
+  </div>
+
+  <script>
+    // ---- Constants ----
+    const SESSIONS = {
+      work:       { label: "Work Session",  duration: 25 * 60 },
+      shortBreak: { label: "Short Break",   duration:  5 * 60 },
+      longBreak:  { label: "Long Break",    duration: 15 * 60 },
+    };
+
+    // ---- SVG ring setup ----
+    const RADIUS = 126;
+    const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+    const ringProgress = document.getElementById("ringProgress");
+    ringProgress.style.strokeDasharray  = CIRCUMFERENCE;
+    ringProgress.style.strokeDashoffset = 0; // full ring = timer at max
+
+    function setRingProgress(fraction) {
+      // fraction 1 = full ring (just started), 0 = empty (done)
+      const offset = CIRCUMFERENCE * (1 - fraction);
+      ringProgress.style.strokeDashoffset = offset;
+    }
+
+    // ---- State ----
+    let currentSession = "work";
+    let totalSeconds    = SESSIONS[currentSession].duration;
+    let remaining       = totalSeconds;
+    let running         = false;
+    let intervalId      = null;
+
+    const timerDisplay = document.getElementById("timerDisplay");
+    const sessionLabel = document.getElementById("sessionLabel");
+    const startBtn     = document.getElementById("startBtn");
+    const resetBtn     = document.getElementById("resetBtn");
+
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60).toString().padStart(2, "0");
+      const s = (secs % 60).toString().padStart(2, "0");
+      return `${m}:${s}`;
+    }
+
+    function updateDisplay() {
+      timerDisplay.textContent = formatTime(remaining);
+      setRingProgress(remaining / totalSeconds);
+    }
+
+    function tick() {
+      if (remaining <= 0) {
+        clearInterval(intervalId);
+        running = false;
+        startBtn.textContent = "Start";
+        return;
+      }
+      remaining--;
+      updateDisplay();
+    }
+
+    function toggleTimer() {
+      if (running) {
+        clearInterval(intervalId);
+        running = false;
+        startBtn.textContent = "Start";
+      } else {
+        intervalId = setInterval(tick, 1000);
+        running = true;
+        startBtn.textContent = "Pause";
+      }
+    }
+
+    function resetTimer() {
+      clearInterval(intervalId);
+      running    = false;
+      remaining  = totalSeconds;
+      startBtn.textContent = "Start";
+      updateDisplay();
+    }
+
+    startBtn.addEventListener("click", toggleTimer);
+    resetBtn.addEventListener("click", resetTimer);
+
+    // ---- Init ----
+    updateDisplay();
+  </script>
+</body>
+</html>
