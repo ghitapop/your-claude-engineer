@@ -49,11 +49,33 @@ YOU pass this to linear agent: "Mark ABC-123 done with evidence: [paths]"
 
 ### Verification Gate (MANDATORY)
 
-Before ANY new feature work:
-1. Ask coding agent to run verification test
-2. Wait for PASS/FAIL response
-3. If FAIL: Fix regressions first (do NOT proceed to new work)
-4. If PASS: Proceed to implementation
+Before ANY new feature work (when completed features exist):
+
+1. Build a test plan: for each completed feature, write 1-2 **specific interactions** to verify (e.g., "click Start, wait 2s, verify timer counts down")
+2. If **1 completed feature:** delegate to a single coding agent on port 3001
+3. If **2+ completed features:** split into two groups, delegate to **two coding agents in parallel** using the Task tool:
+   - Regression Agent A (port 3001): Test features [group 1]
+   - Regression Agent B (port 3002): Test features [group 2]
+4. Wait for ALL agents to respond
+5. If ANY test FAILs:
+   - Ask linear agent to move the failing feature's issue back to **In Progress** (it is no longer Done)
+   - Ask coding agent to fix the regression
+   - After fix: re-run verification gate, commit fix, mark issue Done again
+   - Do NOT proceed to new work until all regressions are fixed
+6. If ALL PASS: Proceed to implementation
+
+**You MUST pass specific test instructions per feature, not just "test existing features".** Example:
+
+```
+Regression test these features (use port 3001):
+- Feature "Timer Display" (NEX-155): Navigate to app, verify 25:00 is shown, take screenshot
+- Feature "Timer Controls" (NEX-156): Click Start, wait 2s, verify timer is counting down, click Pause, verify timer stopped, take screenshot
+Kill port 3001 when done, whether tests pass or fail.
+```
+
+**Port isolation:** Regression Agent A uses port 3001, Regression Agent B uses port 3002. The implementation coding agent uses port 3000.
+
+**Port cleanup:** Each regression agent MUST kill its assigned port before finishing — whether tests PASS or FAIL: `python kill_port.py 3001` / `python kill_port.py 3002`. Leftover dev servers cause port conflicts for subsequent regression gates.
 
 **This gate prevents broken code from accumulating.**
 
@@ -110,13 +132,21 @@ Ask linear agent to:
 ⚠️ **If META issue is not found:** Do NOT proceed with stale IDs. Ask linear agent to list all issues for the project and update `.linear_project.json` with correct IDs before continuing.
 
 **Step 3: Verification Test (MANDATORY)**
-Ask coding agent:
-- Start dev server (init.sh)
-- Test 1-2 completed features
-- Provide screenshots
-- Report PASS/FAIL
 
-⚠️ **If FAIL: Stop here. Ask coding agent to fix the regression.**
+If completed features exist, run the verification gate:
+- Build a test plan: for each completed feature, write 1-2 specific interactions to verify (click X, check Y)
+- If 1 completed feature: delegate to 1 coding agent (port 3001)
+- If 2+ completed features: split into 2 groups and delegate to 2 coding agents in parallel (ports 3001/3002)
+- Each regression agent must kill its port when done (pass or fail)
+- Wait for all results
+
+⚠️ **If FAIL:**
+1. Ask linear agent to move the failing issue back to **In Progress**
+2. Ask coding agent to fix the regression
+3. Re-run verification gate to confirm the fix
+4. Commit the fix via github agent
+5. Mark the issue Done again via linear agent
+6. Only then proceed to Step 4
 
 **Step 4: Implement Feature**
 Pass FULL context to coding agent:

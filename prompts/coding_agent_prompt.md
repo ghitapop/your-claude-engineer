@@ -188,6 +188,10 @@ mcp__playwright__browser_wait_for(text="Success")
 
 **If port 3000 fails:** Try 3001, then 3002. Stop after 2 failures — run `python kill_port.py clean` then retry 3000.
 
+**Regression testing mode:** When the orchestrator assigns you a specific port (e.g., 3001 or 3002) for regression testing, use that port instead of 3000. This allows parallel regression testing without port conflicts.
+
+**Port cleanup after regression testing:** Whether tests PASS or FAIL, always kill your assigned port before reporting results: `python kill_port.py <port>`. Do NOT leave dev servers running on regression ports.
+
 **Always use `-p <port>`.** Never run `npx serve` without `-p` — it picks a random port.
 
 **Do NOT** use `pkill`, `taskkill`, or other process-killing commands directly — they are blocked by the security sandbox. Use `kill_port.py` instead.
@@ -273,5 +277,7 @@ Before reporting back to orchestrator, verify you have:
 - [ ] `screenshot_evidence`: list of screenshot paths (REQUIRED)
 - [ ] `test_results`: what was tested and outcomes
 - [ ] `issues_found`: any problems (or "none")
+
+**Do NOT run `ls` to verify files you just created or edited.** You already know the file paths from your Write/Edit tool calls. Listing directories at the end of a task is unnecessary overhead.
 
 **The orchestrator will reject results without screenshot_evidence.**
