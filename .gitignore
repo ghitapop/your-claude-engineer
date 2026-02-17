@@ -14,3 +14,9 @@ api-key
 .claude/settings.local.json
 CLAUDE.md
 .specs
+.claude/commands
+.claude/skills
+.claude/agents/code-auditor.md
+.claude/agents/codebase-analyst.md
+.claude/agents/library-researcher.md
+.claude/agents/log-analyzer.md
