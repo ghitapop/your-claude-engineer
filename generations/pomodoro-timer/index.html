@@ -16,6 +16,7 @@
       --surface: #16213e;
       --accent: #ff6347;
       --accent-dim: rgba(255, 99, 71, 0.2);
+      --accent-dark: #e5533d;
       --text-primary: #eaeaea;
       --text-secondary: #888;
       --ring-size: 280px;
@@ -93,6 +94,11 @@
       color: var(--text-primary);
       font-variant-numeric: tabular-nums;
       line-height: 1;
+      transition: opacity 0.2s ease;
+    }
+
+    .timer-display.flash {
+      opacity: 0.4;
     }
 
     .session-label {
@@ -101,6 +107,7 @@
       letter-spacing: 0.15em;
       text-transform: uppercase;
       color: var(--text-secondary);
+      transition: opacity 0.3s ease;
     }
 
     /* ---- Controls ---- */
@@ -122,27 +129,79 @@
       letter-spacing: 0.1em;
       text-transform: uppercase;
       cursor: pointer;
-      transition: background 0.2s, color 0.2s;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+                  transform 0.12s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      user-select: none;
+      position: relative;
+      overflow: hidden;
     }
 
     .btn:hover {
       background: var(--accent);
       color: #fff;
+      box-shadow: 0 0 18px rgba(255, 99, 71, 0.45);
+    }
+
+    .btn:active {
+      transform: scale(0.94);
+      box-shadow: 0 0 8px rgba(255, 99, 71, 0.3);
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
     }
 
     .btn-primary {
       background: var(--accent);
       color: #fff;
+      min-width: 120px;
     }
 
     .btn-primary:hover {
-      background: #e5533d;
-      border-color: #e5533d;
+      background: var(--accent-dark);
+      border-color: var(--accent-dark);
+      box-shadow: 0 0 18px rgba(255, 99, 71, 0.55);
     }
 
     .btn-icon {
       padding: 12px 20px;
-      font-size: 1rem;
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+
+    /* Ripple animation on click */
+    @keyframes ripple {
+      0%   { transform: scale(0); opacity: 0.5; }
+      100% { transform: scale(3); opacity: 0; }
+    }
+
+    .btn .ripple {
+      position: absolute;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.35);
+      pointer-events: none;
+      transform: scale(0);
+      animation: ripple 0.45s ease-out forwards;
+    }
+
+    /* Session transition flash */
+    @keyframes sessionFlash {
+      0%   { opacity: 0.15; }
+      50%  { opacity: 1; }
+      100% { opacity: 1; }
+    }
+
+    .session-change {
+      animation: sessionFlash 0.4s ease-out;
+    }
+
+    /* Start button text transition */
+    .btn-primary span {
+      display: inline-block;
+      transition: transform 0.18s ease, opacity 0.18s ease;
     }
 
     /* ---- Responsive ---- */
@@ -153,6 +212,19 @@
 
       .timer-display {
         font-size: 3rem;
+      }
+
+      .controls {
+        gap: 10px;
+      }
+
+      .btn {
+        padding: 10px 20px;
+        font-size: 0.8rem;
+      }
+
+      .btn-icon {
+        padding: 10px 14px;
       }
     }
   </style>
@@ -182,8 +254,11 @@
   </div>
 
   <div class="controls">
-    <button class="btn btn-primary" id="startBtn" aria-label="Start timer">Start</button>
     <button class="btn btn-icon" id="resetBtn" aria-label="Reset timer" title="Reset">&#8635;</button>
+    <button class="btn btn-primary" id="startBtn" aria-label="Start timer">
+      <span id="startBtnText">Start</span>
+    </button>
+    <button class="btn btn-icon" id="skipBtn" aria-label="Skip to next session" title="Skip">&#8677;</button>
   </div>
 
   <script>
@@ -194,32 +269,38 @@
       longBreak:  { label: "Long Break",    duration: 15 * 60 },
     };
 
+    // Cycle order: work -> shortBreak -> work -> shortBreak -> ... (every 4th work -> longBreak)
+    const SESSION_CYCLE = ["work", "shortBreak", "work", "shortBreak", "work", "shortBreak", "work", "longBreak"];
+
     // ---- SVG ring setup ----
     const RADIUS = 126;
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
     const ringProgress = document.getElementById("ringProgress");
     ringProgress.style.strokeDasharray  = CIRCUMFERENCE;
-    ringProgress.style.strokeDashoffset = 0; // full ring = timer at max
+    ringProgress.style.strokeDashoffset = 0;
 
     function setRingProgress(fraction) {
-      // fraction 1 = full ring (just started), 0 = empty (done)
       const offset = CIRCUMFERENCE * (1 - fraction);
       ringProgress.style.strokeDashoffset = offset;
     }
 
     // ---- State ----
-    let currentSession = "work";
-    let totalSeconds    = SESSIONS[currentSession].duration;
-    let remaining       = totalSeconds;
-    let running         = false;
-    let intervalId      = null;
+    let cycleIndex     = 0;
+    let currentSession = SESSION_CYCLE[cycleIndex];
+    let totalSeconds   = SESSIONS[currentSession].duration;
+    let remaining      = totalSeconds;
+    let running        = false;
+    let intervalId     = null;
 
-    const timerDisplay = document.getElementById("timerDisplay");
-    const sessionLabel = document.getElementById("sessionLabel");
-    const startBtn     = document.getElementById("startBtn");
-    const resetBtn     = document.getElementById("resetBtn");
+    const timerDisplay  = document.getElementById("timerDisplay");
+    const sessionLabel  = document.getElementById("sessionLabel");
+    const startBtn      = document.getElementById("startBtn");
+    const startBtnText  = document.getElementById("startBtnText");
+    const resetBtn      = document.getElementById("resetBtn");
+    const skipBtn       = document.getElementById("skipBtn");
 
+    // ---- Helpers ----
     function formatTime(secs) {
       const m = Math.floor(secs / 60).toString().padStart(2, "0");
       const s = (secs % 60).toString().padStart(2, "0");
@@ -231,11 +312,52 @@
       setRingProgress(remaining / totalSeconds);
     }
 
+    function setStartBtnState(isRunning) {
+      startBtnText.textContent = isRunning ? "Pause" : "Start";
+      startBtn.setAttribute("aria-label", isRunning ? "Pause timer" : "Start timer");
+    }
+
+    function applySessionChange() {
+      currentSession = SESSION_CYCLE[cycleIndex];
+      totalSeconds   = SESSIONS[currentSession].duration;
+      remaining      = totalSeconds;
+
+      sessionLabel.textContent = SESSIONS[currentSession].label;
+
+      // Visual flash to indicate session change
+      timerDisplay.classList.remove("session-change");
+      sessionLabel.classList.remove("session-change");
+      void timerDisplay.offsetWidth; // force reflow
+      timerDisplay.classList.add("session-change");
+      sessionLabel.classList.add("session-change");
+
+      updateDisplay();
+    }
+
+    // ---- Ripple effect ----
+    function triggerRipple(btn, event) {
+      const rect   = btn.getBoundingClientRect();
+      const ripple = document.createElement("span");
+      ripple.className = "ripple";
+
+      const x = (event.clientX - rect.left) - 30;
+      const y = (event.clientY - rect.top)  - 30;
+      ripple.style.left = x + "px";
+      ripple.style.top  = y + "px";
+
+      btn.appendChild(ripple);
+      ripple.addEventListener("animationend", () => ripple.remove());
+    }
+
+    // ---- Timer logic ----
     function tick() {
       if (remaining <= 0) {
         clearInterval(intervalId);
-        running = false;
-        startBtn.textContent = "Start";
+        intervalId = null;
+        running    = false;
+        setStartBtnState(false);
+        // Auto-advance to next session
+        advanceSession();
         return;
       }
       remaining--;
@@ -245,27 +367,56 @@
     function toggleTimer() {
       if (running) {
         clearInterval(intervalId);
-        running = false;
-        startBtn.textContent = "Start";
+        intervalId = null;
+        running    = false;
+        setStartBtnState(false);
       } else {
         intervalId = setInterval(tick, 1000);
-        running = true;
-        startBtn.textContent = "Pause";
+        running    = true;
+        setStartBtnState(true);
       }
     }
 
     function resetTimer() {
       clearInterval(intervalId);
+      intervalId = null;
       running    = false;
       remaining  = totalSeconds;
-      startBtn.textContent = "Start";
+      setStartBtnState(false);
       updateDisplay();
     }
 
-    startBtn.addEventListener("click", toggleTimer);
-    resetBtn.addEventListener("click", resetTimer);
+    function advanceSession() {
+      cycleIndex = (cycleIndex + 1) % SESSION_CYCLE.length;
+      applySessionChange();
+    }
+
+    function skipSession() {
+      clearInterval(intervalId);
+      intervalId = null;
+      running    = false;
+      setStartBtnState(false);
+      advanceSession();
+    }
+
+    // ---- Event listeners ----
+    startBtn.addEventListener("click", function(e) {
+      triggerRipple(this, e);
+      toggleTimer();
+    });
+
+    resetBtn.addEventListener("click", function(e) {
+      triggerRipple(this, e);
+      resetTimer();
+    });
+
+    skipBtn.addEventListener("click", function(e) {
+      triggerRipple(this, e);
+      skipSession();
+    });
 
     // ---- Init ----
+    sessionLabel.textContent = SESSIONS[currentSession].label;
     updateDisplay();
   </script>
 </body>
